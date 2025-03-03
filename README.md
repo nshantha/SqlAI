@@ -119,10 +119,6 @@ If you encounter issues:
 3. Ensure the MCP server is installed correctly
 4. Check the application logs for errors
 
-## License
-
-MIT
-
 ## Acknowledgements
 
 - [Model Context Protocol](https://modelcontextprotocol.io/)
