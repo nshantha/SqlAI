@@ -159,7 +159,7 @@ class LLMService:
         
         try:
             response = self.client.messages.create(
-                model="claude-3-5-haiku-latest",
+                model="claude-3-5-sonnet-latest",
                 system=system_prompt,
                 messages=messages,
                 max_tokens=4000,
@@ -233,12 +233,97 @@ class LLMService:
         if not results:
             return "The query returned no results."
         
-        # For small result sets, use JSON formatting
-        if len(results) <= 20:
-            return json.dumps(results, indent=2, default=str)
+        # For small result sets (≤ 5), create a beautiful markdown table
+        if len(results) <= 5:
+            return self._create_beautiful_table(results, show_all_columns=True)
         
-        # For larger result sets, provide a summary
-        return f"The query returned {len(results)} rows. First 5 rows:\n{json.dumps(results[:5], indent=2, default=str)}"
+        # For medium result sets (6-20), show all rows but with limited details
+        if len(results) <= 20:
+            return self._create_beautiful_table(results, show_all_columns=True, abbreviate_values=True)
+        
+        # For larger result sets (> 20), show all rows but only ID columns
+        return self._create_beautiful_table(results, show_all_columns=False)
+    
+    def _create_beautiful_table(self, results: List[Dict[str, Any]], 
+                               show_all_columns: bool = True,
+                               abbreviate_values: bool = False) -> str:
+        """
+        Create a beautiful markdown table from query results
+        
+        Args:
+            results: Query results
+            show_all_columns: Whether to show all columns or just ID columns
+            abbreviate_values: Whether to abbreviate long values
+            
+        Returns:
+            Formatted markdown table as string
+        """
+        if not results:
+            return "The query returned no results."
+        
+        # Start with a summary
+        summary = f"📊 **Query Results:** {len(results)} rows found\n\n"
+        
+        # Determine which columns to display
+        if show_all_columns:
+            columns = list(results[0].keys())
+        else:
+            # Show only ID, code, and name columns
+            id_columns = [col for col in results[0].keys() if "id" in col.lower() or "code" in col.lower() or "name" in col.lower()]
+            if not id_columns:
+                # If no ID columns found, use the first column
+                id_columns = [list(results[0].keys())[0]]
+            columns = id_columns
+        
+        # Start markdown table
+        summary += "| " + " | ".join([f"**{col}**" for col in columns]) + " |\n"
+        summary += "| " + " | ".join(["---" for _ in columns]) + " |\n"
+        
+        # Add rows
+        for row in results:
+            row_values = []
+            for col in columns:
+                value = row.get(col, "")
+                
+                # Format the value based on its type and content
+                str_value = str(value)
+                
+                # Highlight ID values
+                if "id" in col.lower() and str_value.isdigit():
+                    str_value = f"`{str_value}`"  # Code formatting for IDs
+                
+                # Format dates nicely
+                elif "date" in col.lower() and str_value and str_value != "None":
+                    # Try to make dates more readable if they look like dates
+                    if "-" in str_value and len(str_value) >= 10:
+                        str_value = f"📅 {str_value.split(' ')[0]}"
+                
+                # Abbreviate long values if requested
+                elif abbreviate_values and len(str_value) > 20:
+                    str_value = str_value[:17] + "..."
+                
+                # Add emoji indicators for certain columns
+                if "status" in col.lower():
+                    if "active" in str_value.lower():
+                        str_value = "✅ " + str_value
+                    elif "inactive" in str_value.lower() or "expired" in str_value.lower():
+                        str_value = "❌ " + str_value
+                
+                row_values.append(str_value)
+            
+            summary += "| " + " | ".join(row_values) + " |\n"
+        
+        # Add note about expandability
+        if len(results) > 5:
+            summary += "\n> 💡 *The table above shows all " + ("rows" if len(results) <= 20 else "IDs") + ". Expand for more details.*\n"
+        
+        # For larger result sets, add detailed view of first 5 rows
+        if len(results) > 5:
+            # Use markdown formatting that's more likely to be preserved
+            summary += "\n**Detailed View (First 5 Rows)**\n\n"
+            summary += "```json\n" + json.dumps(results[:5], indent=2, default=str) + "\n```\n"
+        
+        return summary
     
     async def _generate_response_with_results(
         self, 
@@ -262,9 +347,13 @@ class LLMService:
         system_prompt = self._build_system_prompt(db_schema) + """
 Additional instructions:
 - I've executed the SQL query you generated and will provide the results
-- Analyze the query results and provide insights
+- IMPORTANT: Always include the FULL table of results in your response exactly as provided
+- Preserve the exact markdown formatting of the table including all emojis, formatting, and styling
+- Preserve all code blocks with their triple backticks (```) exactly as provided
+- Do not summarize or omit any rows from the table - show ALL results
+- Copy and paste the entire table with its formatting intact
+- After showing the complete table, you can analyze the query results and provide insights
 - Explain the data in a way that directly answers the user's question
-- Format tables or lists nicely when presenting numeric data
 - If the results don't fully address the question, suggest improvements
 """
         
@@ -277,16 +366,21 @@ I generated this SQL query:
 ```
 
 Query results:
-```json
 {results_text}
-```
 
-Please help me analyze these results and answer the user's question.
+IMPORTANT INSTRUCTIONS:
+1. Copy and paste the COMPLETE table above in your response, preserving ALL formatting
+2. Do not modify the table format, keep all markdown, emojis, and styling exactly as shown
+3. Preserve all code blocks with their triple backticks (```) exactly as provided
+4. Show ALL rows in the table - do not summarize or omit any data
+
 """
+# extra prompt:
+# 5. After including the complete table, provide your analysis and insights, but keep it concise and to the point
         
         try:
             response = self.client.messages.create(
-                model="claude-3-5-haiku-latest",
+                model="claude-3-5-sonnet-latest",
                 system=system_prompt,
                 messages=[{"role": "user", "content": message_content}],
                 max_tokens=4000,
@@ -342,7 +436,7 @@ Please explain what went wrong and how to fix it.
         
         try:
             response = self.client.messages.create(
-                model="claude-3-5-haiku-latest",
+                model="claude-3-5-sonnet-latest",
                 system=system_prompt,
                 messages=[{"role": "user", "content": message_content}],
                 max_tokens=4000,

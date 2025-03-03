@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Database Chat</title>
+    <title>SQL AI Assistant</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="bg-gray-100 h-screen flex flex-col">
     <header class="bg-blue-600 text-white shadow-md">
         <div class="container mx-auto px-6 py-3 flex justify-between items-center">
-            <h1 class="text-xl font-bold">MCP Database Chat</h1>
+            <h1 class="text-xl font-bold">SQL AI Assistant</h1>
             <div class="flex items-center space-x-2">
                 <span id="connection-status" class="px-2 py-1 rounded text-xs bg-green-500">Connected</span>
                 <button id="db-info-btn" class="px-3 py-1 bg-blue-700 rounded hover:bg-blue-800 text-sm">
@@ -24,7 +24,7 @@
         <div class="flex-1 bg-white rounded-lg shadow-md flex flex-col mb-4 overflow-hidden">
             <div id="conversation" class="flex-1 p-4 overflow-y-auto">
                 <div class="welcome-message bg-gray-100 p-4 rounded-lg mb-4">
-                    <h2 class="font-bold text-lg text-blue-600 mb-2">Welcome to MCP Database Chat!</h2>
+                    <h2 class="font-bold text-lg text-blue-600 mb-2">Welcome to AI Assistant For PostgreSQL!</h2>
                     <p>This application allows you to query your PostgreSQL database using natural language.</p>
                     <p class="mt-2">Try asking questions like:</p>
                     <ul class="list-disc pl-5 mt-1">

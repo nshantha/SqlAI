@@ -1,4 +1,4 @@
-// Main JavaScript for MCP Database Chat
+// Main JavaScript for SQL AI Assistant
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
