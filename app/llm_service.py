@@ -347,14 +347,16 @@ class LLMService:
         system_prompt = self._build_system_prompt(db_schema) + """
 Additional instructions:
 - I've executed the SQL query you generated and will provide the results
+- CRITICAL: ONLY return information that is directly retrieved from the database
+- NEVER hallucinate or make up data that isn't explicitly returned from the query
 - IMPORTANT: Always include the FULL table of results in your response exactly as provided
 - Preserve the exact markdown formatting of the table including all emojis, formatting, and styling
 - Preserve all code blocks with their triple backticks (```) exactly as provided
 - Do not summarize or omit any rows from the table - show ALL results
 - Copy and paste the entire table with its formatting intact
-- After showing the complete table, you can analyze the query results and provide insights
-- Explain the data in a way that directly answers the user's question
-- If the results don't fully address the question, suggest improvements
+- If the results don't answer the user's question, state clearly "The database does not contain information to answer this question" - do not speculate or make up information
+- If the results are empty, state clearly "The query returned no results" - do not speculate why
+- Always clearly distinguish between factual data from the database and any explanations you provide
 """
         
         message_content = f"""
@@ -373,10 +375,10 @@ IMPORTANT INSTRUCTIONS:
 2. Do not modify the table format, keep all markdown, emojis, and styling exactly as shown
 3. Preserve all code blocks with their triple backticks (```) exactly as provided
 4. Show ALL rows in the table - do not summarize or omit any data
+5. ONLY provide information that is directly from the database results
+6. If the results don't answer the question, state "The database does not contain this information" - do not speculate or make up information
 
 """
-# extra prompt:
-# 5. After including the complete table, provide your analysis and insights, but keep it concise and to the point
         
         try:
             response = self.client.messages.create(
@@ -401,12 +403,12 @@ IMPORTANT INSTRUCTIONS:
         db_schema: Optional[str] = None
     ) -> str:
         """
-        Generate a response explaining a SQL error
+        Generate a response when a SQL query fails
         
         Args:
             user_message: Original user question
             sql_query: SQL query that failed
-            error_message: Error message from database
+            error_message: Error message from the database
             db_schema: Database schema information
             
         Returns:
@@ -414,10 +416,13 @@ IMPORTANT INSTRUCTIONS:
         """
         system_prompt = self._build_system_prompt(db_schema) + """
 Additional instructions:
-- I attempted to execute the SQL query you generated, but it resulted in an error
-- Explain what went wrong and how to fix it
-- Suggest an improved query if possible
-- Be helpful and educational about the error
+- I attempted to execute a SQL query but it failed
+- CRITICAL: ONLY explain the specific error that occurred - do not speculate about data that might exist
+- NEVER hallucinate or make up information about the database contents
+- Explain the error in technical terms based solely on the error message
+- If you cannot determine the cause from the error message, state "I cannot determine the exact cause of this error without more information"
+- Do not make assumptions about what data might be in the database
+- Focus only on explaining why the query syntax or structure caused the error
 """
         
         message_content = f"""
@@ -428,10 +433,12 @@ I generated this SQL query:
 {sql_query}
 ```
 
-But it resulted in this error:
+The query failed with this error:
+```
 {error_message}
+```
 
-Please explain what went wrong and how to fix it.
+Please explain what went wrong with the query and how to fix it. Do not speculate about what data might exist in the database - focus only on the technical error.
 """
         
         try:
@@ -439,7 +446,7 @@ Please explain what went wrong and how to fix it.
                 model="claude-3-5-sonnet-latest",
                 system=system_prompt,
                 messages=[{"role": "user", "content": message_content}],
-                max_tokens=4000,
+                max_tokens=2000,
                 temperature=0.1
             )
             
@@ -447,4 +454,4 @@ Please explain what went wrong and how to fix it.
             
         except Exception as e:
             logger.error(f"Error generating error response: {e}")
-            return f"I tried to run this query:\n```sql\n{sql_query}\n```\n\nBut it failed with error: {error_message}\n\nI apologize, but I encountered an additional error while analyzing this issue: {str(e)}"
+            return f"I tried to run this query:\n```sql\n{sql_query}\n```\n\nBut it failed with this error:\n```\n{error_message}\n```\n\nI apologize, but I encountered an error while trying to explain the issue: {str(e)}"
