@@ -1,0 +1,9 @@
+IMPORTANT DATABASE-SPECIFIC INSTRUCTIONS:
+- Always use standard PostgreSQL syntax
+- Ensure queries are well-structured and optimized
+- Keep queries focused and efficient - avoid selecting unnecessary columns
+- Always escape SQL reserved keywords used as column names with double quotes
+- Common reserved words: "end", "order", "user", "group", "limit", "offset", "select", "from", "where", "join"
+- Use appropriate JOINs when querying multiple tables
+- Include comments in complex queries to explain your reasoning
+- For date comparisons, use CURRENT_DATE or CURRENT_TIMESTAMP 

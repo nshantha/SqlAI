@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 from typing import Dict, List, Any, Optional, Tuple
 import anthropic
 import json
@@ -18,22 +19,105 @@ class LLMService:
         """
         self.client = anthropic.Anthropic(api_key=api_key)
         
-        # Database-specific prompt templates
-        self.db_specific_prompts = {
-            "promo_tracker_db": """
-When working with the promotion tracker database:
-1. Always remember the CURRENT_DATE is the current date in the database
-2. To check if a registration/registration id/ promo code is active, current_date >= regisration_start_date from registration table AND current_date <= promotion_end_date from promotions table
-3. A promotion is active when: current_date >= promotion_start_date AND current_date <= promotion_end_date
-4. Use CURRENT_DATE for date comparisons in queries
-5. For date ranges, use BETWEEN or explicit comparisons (>= and <=)
-6. If the user asks for redemptions, join the registration table with the redemption table on promotion_id
-9. Always wrap the "end" column in double quotes in all queries (it's a SQL reserved keyword)
-10. Other reserved keywords that need double quotes: "order", "user", "group", "limit", "offset"
-11. If the user asks for active registrations, only return registrations that are active
-12. If the user asks for active promotions, only return promotions that are active
-"""
-        }
+        # Load prompts from files
+        self.base_prompt = self._load_prompt_file("app/prompts/base_prompt.txt")
+        self.default_db_prompt = self._load_prompt_file("app/prompts/databases/default.txt")
+        self.db_specific_prompts = self._load_db_prompts()
+    
+    def _load_prompt_file(self, file_path: str) -> str:
+        """
+        Load prompt from a file
+        
+        Args:
+            file_path: Path to the prompt file
+            
+        Returns:
+            Prompt text
+        """
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    return f.read().strip()
+            else:
+                logger.warning(f"Prompt file not found: {file_path}")
+                return ""
+        except Exception as e:
+            logger.error(f"Error loading prompt file {file_path}: {e}")
+            return ""
+    
+    def _load_db_prompts(self) -> Dict[str, str]:
+        """
+        Load all database-specific prompts
+        
+        Returns:
+            Dictionary of database name to prompt text
+        """
+        prompts = {}
+        db_prompts_dir = "app/prompts/databases"
+        
+        try:
+            if os.path.exists(db_prompts_dir):
+                for filename in os.listdir(db_prompts_dir):
+                    if filename.endswith(".txt") and filename != "default.txt":
+                        db_name = filename.replace(".txt", "")
+                        file_path = os.path.join(db_prompts_dir, filename)
+                        prompts[db_name] = self._load_prompt_file(file_path)
+            return prompts
+        except Exception as e:
+            logger.error(f"Error loading database prompts: {e}")
+            return {}
+
+    def _build_system_prompt(self, db_schema: Optional[str] = None) -> str:
+        """
+        Build the system prompt with database context
+        
+        Args:
+            db_schema: Database schema information
+            
+        Returns:
+            Formatted system prompt
+        """
+        # Start with the base prompt
+        system_prompt = self.base_prompt
+        
+        # Add database-specific instructions if available
+        db_name = self._extract_db_name_from_schema(db_schema)
+        if db_name and db_name in self.db_specific_prompts:
+            system_prompt += "\n\n" + self.db_specific_prompts[db_name]
+        else:
+            # Use default database prompt if specific one not found
+            system_prompt += "\n\n" + self.default_db_prompt
+        
+        # Add database schema information if available
+        if db_schema:
+            system_prompt += "\n\nDatabase Schema Information:\n" + db_schema
+        
+        return system_prompt
+    
+    def _extract_db_name_from_schema(self, db_schema: Optional[str]) -> Optional[str]:
+        """
+        Extract database name from schema information
+        
+        Args:
+            db_schema: Database schema information
+            
+        Returns:
+            Database name if found, None otherwise
+        """
+        if not db_schema:
+            return None
+        
+        # Try to find database name in the schema information
+        import re
+        match = re.search(r"Database Schema (?:for|of)?\s+([a-zA-Z0-9_]+)", db_schema, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        
+        # Check if promo_tracker is mentioned
+        if "promo_tracker" in db_schema.lower():
+            return "promo_tracker_db"
+        
+        return None
     
     async def generate_response(
         self, 
@@ -111,70 +195,6 @@ When working with the promotion tracker database:
         except Exception as e:
             logger.error(f"Error generating response from Claude: {e}")
             return f"I apologize, but I encountered an error: {str(e)}", None
-    
-    def _build_system_prompt(self, db_schema: Optional[str] = None) -> str:
-        """
-        Build the system prompt with database context
-        
-        Args:
-            db_schema: Database schema information
-            
-        Returns:
-            Formatted system prompt
-        """
-        system_prompt = """
-You are a helpful database assistant that helps users understand and query their PostgreSQL database.
-Your primary role is to assist users in exploring their data, understanding database structure, and generating insights.
-
-When users ask about their data, you should:
-1. Generate appropriate SQL queries to answer the user's questions
-2. Provide concise explanations - be brief and to the point
-3. Format query results in a readable way
-4. Avoid lengthy explanations unless specifically requested
-
-For SQL queries:
-- Always use standard PostgreSQL syntax
-- Ensure queries are well-structured and optimized
-- Always place SQL code inside triple backticks with sql language specifier: ```sql
-- Keep queries focused and efficient - avoid selecting unnecessary columns
-- IMPORTANT: Always escape SQL reserved keywords used as column names with double quotes
-"""
-
-        # Add database-specific instructions if available
-        db_name = self._extract_db_name_from_schema(db_schema)
-        if db_name and db_name in self.db_specific_prompts:
-            system_prompt += "\n\n" + self.db_specific_prompts[db_name]
-        
-        # Add database schema information if available
-        if db_schema:
-            system_prompt += "\n\nDatabase Schema Information:\n" + db_schema
-            
-        return system_prompt
-    
-    def _extract_db_name_from_schema(self, db_schema: Optional[str]) -> Optional[str]:
-        """
-        Extract database name from schema information
-        
-        Args:
-            db_schema: Database schema information
-            
-        Returns:
-            Database name if found, None otherwise
-        """
-        if not db_schema:
-            return None
-        
-        # Try to find database name in the schema information
-        import re
-        match = re.search(r"Database Schema (?:for|of)?\s+([a-zA-Z0-9_]+)", db_schema, re.IGNORECASE)
-        if match:
-            return match.group(1)
-        
-        # Check if promo_tracker is mentioned
-        if "promo_tracker" in db_schema.lower():
-            return "promo_tracker_db"
-        
-        return None
     
     def _extract_sql_query(self, text: str) -> Optional[str]:
         """
