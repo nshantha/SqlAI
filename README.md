@@ -29,8 +29,8 @@ The application consists of:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/sql-ai.git
-   cd sql-ai
+   git clone https://github.com/nshantha/SqlAI.git
+   cd SqlAI
    ```
 
 2. Install dependencies:
