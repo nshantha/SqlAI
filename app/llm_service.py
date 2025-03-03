@@ -4,6 +4,7 @@ import os
 from typing import Dict, List, Any, Optional, Tuple
 import anthropic
 import json
+from app.config import DB_IDENTIFICATION_PATTERNS, DB_NAME_HEADER_PATTERN
 
 logger = logging.getLogger(__name__)
 
@@ -107,16 +108,19 @@ class LLMService:
         if not db_schema:
             return None
         
-        # Try to find database name in the schema information
+        # Try to find database name in the schema information using the configured pattern
         import re
-        match = re.search(r"Database Schema (?:for|of)?\s+([a-zA-Z0-9_]+)", db_schema, re.IGNORECASE)
+        match = re.search(DB_NAME_HEADER_PATTERN, db_schema, re.IGNORECASE)
         if match:
             return match.group(1)
         
-        # Check if promo_tracker is mentioned
-        if "promo_tracker" in db_schema.lower():
-            return "promo_tracker_db"
+        # Check for database-specific patterns from configuration
+        db_schema_lower = db_schema.lower()
+        for pattern, db_name in DB_IDENTIFICATION_PATTERNS.items():
+            if re.search(pattern, db_schema_lower, re.IGNORECASE):
+                return db_name
         
+        # No specific database identified
         return None
     
     async def generate_response(

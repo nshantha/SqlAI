@@ -42,3 +42,14 @@ MCP_PG_CONNECTION_STRING = f"postgres://{DB_USER}:{encoded_password}@{DB_HOST}:{
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+
+# Database identification patterns
+# Maps patterns found in schema to database names
+DB_IDENTIFICATION_PATTERNS = {
+    # Pattern: Database name
+    r"promo_tracker": "promo_tracker_db",
+    # Add more patterns as needed
+}
+
+# Default regex pattern to extract database name from schema header
+DB_NAME_HEADER_PATTERN = r"Database Schema (?:for|of)?\s+([a-zA-Z0-9_]+)"
