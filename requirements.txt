@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+anthropic
+python-dotenv
+websockets
+jsonrpc
+pydantic
+aiohttp
+jinja2
+psycopg2-binary
