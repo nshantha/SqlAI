@@ -19,6 +19,82 @@ The application consists of:
 3. **Claude AI Integration**: Processes natural language and generates responses
 4. **Web Interface**: Provides a user-friendly chat experience
 
+## How It Works!!
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as SQL Chat App
+    participant Claude as Claude API
+    participant MCP as MCP Client/Server
+    participant DB as PostgreSQL Database
+    
+    User->>App: Ask "How many orders placed last month?"
+    
+    App->>MCP: Initialize MCP connection
+    MCP->>DB: Connect to PostgreSQL
+    DB->>MCP: Connection established
+    MCP->>App: Connection successful
+    
+    App->>MCP: resources/list request
+    MCP->>DB: Query database schema
+    DB->>MCP: Return tables & schemas
+    MCP->>App: Return resources (tables)
+    
+    App->>MCP: tools/list request
+    MCP->>App: Return available tools (execute_query)
+    
+    App->>Claude: Send user question + schema info
+    Claude->>App: Generate SQL query
+    
+    App->>MCP: tools/call (execute_query)
+    MCP->>DB: Execute SQL query
+    DB->>MCP: Return query results
+    MCP->>App: Return results
+    
+    App->>Claude: Send query results for explanation
+    Claude->>App: Generate human-readable response
+    
+    App->>User: Show response in chat interface
+```
+
+### FlowChart
+
+```mermaid
+flowchart TB
+    User[User] <--> WebApp[Web Interface]
+    
+    subgraph "SQL Chat Application"
+        WebApp <--> FastAPI[FastAPI Backend]
+        FastAPI <--> LLM[Claude LLM Service]
+        FastAPI <--> MCPClient[MCP Client]
+    end
+    
+    subgraph "MCP Layer"
+        MCPClient <-->|JSON-RPC over stdio| MCPServer[MCP PostgreSQL Server]
+        
+        subgraph "MCP Components"
+            direction TB
+            Resources[Resources\n- Tables\n- Schemas\n- Views]
+            Tools[Tools\n- execute_query\n- get_schema\n- list_tables]
+            Transport[Transport Layer\n- stdio\n- JSON-RPC]
+        end
+    end
+    
+    MCPServer <-->|JDBC Connection| DB[(PostgreSQL Database)]
+    
+    style User fill:#f9f9f9,stroke:#333,stroke-width:1px
+    style WebApp fill:#ede7f6,stroke:#4527a0,stroke-width:1px
+    
+    classDef appNode fill:#e3f2fd,stroke:#1565c0,stroke-width:1px
+    classDef mcpNode fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px
+    classDef mcpComp fill:#c8e6c9,stroke:#388e3c,stroke-width:1px,stroke-dasharray: 5 5
+    
+    class FastAPI,LLM,MCPClient appNode
+    class MCPServer,Transport mcpNode
+    class Resources,Tools mcpComp
+```
+
 ## Prerequisites
 
 - Python 3+
